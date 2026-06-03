@@ -85,6 +85,7 @@ if df_filtered.empty:
     st.warning("Нет данных для выбранных фильтров.")
     st.stop()
 
+if analysis_mode == "По годам":
     # Group by City, Year
     df_grouped = df_filtered.groupby(["City", "Year"])["Precipitation"].sum().reset_index()
     
@@ -100,7 +101,7 @@ if df_filtered.empty:
     fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
     fig.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True)
-    
+
 elif analysis_mode == "По сезонам":
     seasons = ["Зима", "Весна", "Лето", "Осень"]
     selected_season = st.sidebar.selectbox("Выберите сезон:", seasons)
