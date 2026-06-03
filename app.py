@@ -4,7 +4,7 @@ import sqlite3
 import plotly.express as px
 import datetime
 
-st.set_page_config(page_title="Погода Дашборд", page_icon="🌧", layout="wide")
+st.set_page_config(page_title="Погода Дашборд", page_icon="🌧", layout="wide", initial_sidebar_state="collapsed")
 
 # CSS-хак для замены текста "Select all" и "Clear all" внутри Streamlit компонентов
 # А также для увеличения шрифта в боковом меню
@@ -36,6 +36,14 @@ st.markdown("""
     footer {visibility: hidden;}
     .stDeployButton {display: none !important;}
     [data-testid="stAppDeployButton"] {display: none !important;}
+
+    /* Адаптация для мобильных устройств */
+    @media (max-width: 768px) {
+        h1 { font-size: 1.4rem !important; }
+        h2, h3 { font-size: 1.1rem !important; }
+        [data-testid="stSidebar"] label p { font-size: 15px !important; }
+        [data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 14px !important; }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -60,12 +68,20 @@ st.title("🌧 Анализ динамики осадков (pogodaiklimat.ru)",
 
 st.sidebar.header("Настройки фильтра")
 
+# Читаем сохраненное состояние из URL
+qp = st.query_params
+saved_cities = qp.get_all("city") if "city" in qp else []
+saved_mode   = qp.get("mode", "По годам")
+saved_season = qp.get("season", "Зима")
+saved_month  = qp.get("month", "Январь")
+
 # City filter
 available_cities = sorted(df["City"].unique())
+default_cities = [c for c in saved_cities if c in available_cities] or (available_cities[:1] if available_cities else [])
 selected_cities = st.sidebar.multiselect(
     "Выберите города:", 
     available_cities, 
-    default=available_cities[:1] if available_cities else [],
+    default=default_cities,
     placeholder="Выберите город(а)..."
 )
 
@@ -73,10 +89,17 @@ if not selected_cities:
     st.warning("Пожалуйста, выберите хотя бы один город для анализа.")
     st.stop()
 
+modes = ["По годам", "По сезонам", "По месяцам", "Сводная"]
+saved_mode_idx = modes.index(saved_mode) if saved_mode in modes else 0
 analysis_mode = st.sidebar.radio(
     "Режим анализа:",
-    ["По годам", "По сезонам", "По месяцам", "Сводная"]
+    modes,
+    index=saved_mode_idx
 )
+
+# Сохраняем города и режим в URL
+st.query_params["city"] = selected_cities
+st.query_params["mode"] = analysis_mode
 
 # Filtering data for selected cities
 df_filtered = df[df["City"].isin(selected_cities)].copy()
@@ -104,7 +127,9 @@ if analysis_mode == "По годам":
 
 elif analysis_mode == "По сезонам":
     seasons = ["Зима", "Весна", "Лето", "Осень"]
-    selected_season = st.sidebar.selectbox("Выберите сезон:", seasons)
+    saved_season_idx = seasons.index(saved_season) if saved_season in seasons else 0
+    selected_season = st.sidebar.selectbox("Выберите сезон:", seasons, index=saved_season_idx)
+    st.query_params["season"] = selected_season
     
     # Filter by season
     df_season = df_filtered[df_filtered["Season"] == selected_season]
@@ -136,7 +161,10 @@ elif analysis_mode == "По месяцам":
         5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
         9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
     }
-    selected_month_name = st.sidebar.selectbox("Выберите месяц:", list(month_names.values()))
+    month_list = list(month_names.values())
+    saved_month_idx = month_list.index(saved_month) if saved_month in month_list else 0
+    selected_month_name = st.sidebar.selectbox("Выберите месяц:", month_list, index=saved_month_idx)
+    st.query_params["month"] = selected_month_name
     selected_month_num = [k for k, v in month_names.items() if v == selected_month_name][0]
     
     # Filter by month
