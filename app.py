@@ -39,7 +39,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-DB_PATH = "F:\\WeatherDashboard\\weather_data.db"
+# Используем относительный путь, чтобы база находилась и локально, и на сервере
+DB_PATH = "weather_data.db"
 
 @st.cache_data(ttl=3600)
 def load_data():
