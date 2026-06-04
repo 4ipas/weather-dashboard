@@ -68,20 +68,25 @@ st.title("🌧 Анализ динамики осадков (pogodaiklimat.ru)",
 
 st.sidebar.header("Настройки фильтра")
 
-# Читаем сохраненное состояние из URL
-qp = st.query_params
-saved_cities = qp.get_all("city") if "city" in qp else []
-saved_mode   = qp.get("mode", "По годам")
-saved_season = qp.get("season", "Зима")
-saved_month  = qp.get("month", "Январь")
-
-# City filter
 available_cities = sorted(df["City"].unique())
-default_cities = [c for c in saved_cities if c in available_cities] or (available_cities[:1] if available_cities else [])
+modes = ["По годам", "По сезонам", "По месяцам", "Сводная"]
+
+# Инициализация из URL-параметров ТОЛЬКО при первом запуске
+# После этого session_state управляет состоянием — нет конфликта с виджетами
+if "initialized" not in st.session_state:
+    qp = st.query_params
+    saved_cities = qp.get_all("city") if "city" in qp else []
+    saved_mode   = qp.get("mode", "По годам")
+    st.session_state.cities  = [c for c in saved_cities if c in available_cities] or (available_cities[:1] if available_cities else [])
+    st.session_state.mode    = saved_mode if saved_mode in modes else "По годам"
+    st.session_state.season  = qp.get("season", "Зима")
+    st.session_state.month   = qp.get("month", "Январь")
+    st.session_state.initialized = True
+
 selected_cities = st.sidebar.multiselect(
-    "Выберите города:", 
-    available_cities, 
-    default=default_cities,
+    "Выберите города:",
+    available_cities,
+    default=st.session_state.cities,
     placeholder="Выберите город(а)..."
 )
 
@@ -89,15 +94,16 @@ if not selected_cities:
     st.warning("Пожалуйста, выберите хотя бы один город для анализа.")
     st.stop()
 
-modes = ["По годам", "По сезонам", "По месяцам", "Сводная"]
-saved_mode_idx = modes.index(saved_mode) if saved_mode in modes else 0
 analysis_mode = st.sidebar.radio(
     "Режим анализа:",
     modes,
-    index=saved_mode_idx
+    index=modes.index(st.session_state.mode) if st.session_state.mode in modes else 0,
+    key="analysis_mode_radio"
 )
 
-# Сохраняем города и режим в URL
+# Обновляем session_state и URL из текущего состояния виджетов
+st.session_state.cities = selected_cities
+st.session_state.mode   = analysis_mode
 st.query_params["city"] = selected_cities
 st.query_params["mode"] = analysis_mode
 
@@ -127,8 +133,9 @@ if analysis_mode == "По годам":
 
 elif analysis_mode == "По сезонам":
     seasons = ["Зима", "Весна", "Лето", "Осень"]
-    saved_season_idx = seasons.index(saved_season) if saved_season in seasons else 0
-    selected_season = st.sidebar.selectbox("Выберите сезон:", seasons, index=saved_season_idx)
+    season_idx = seasons.index(st.session_state.season) if st.session_state.season in seasons else 0
+    selected_season = st.sidebar.selectbox("Выберите сезон:", seasons, index=season_idx, key="season_box")
+    st.session_state.season = selected_season
     st.query_params["season"] = selected_season
     
     # Filter by season
@@ -162,8 +169,9 @@ elif analysis_mode == "По месяцам":
         9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
     }
     month_list = list(month_names.values())
-    saved_month_idx = month_list.index(saved_month) if saved_month in month_list else 0
-    selected_month_name = st.sidebar.selectbox("Выберите месяц:", month_list, index=saved_month_idx)
+    month_idx = month_list.index(st.session_state.month) if st.session_state.month in month_list else 0
+    selected_month_name = st.sidebar.selectbox("Выберите месяц:", month_list, index=month_idx, key="month_box")
+    st.session_state.month = selected_month_name
     st.query_params["month"] = selected_month_name
     selected_month_num = [k for k, v in month_names.items() if v == selected_month_name][0]
     
