@@ -143,7 +143,7 @@ if analysis_mode == "По годам":
         title="Динамика осадков (По годам)",
         text_auto='.1f'
     )
-    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), width='stretch')
 
 elif analysis_mode == "По сезонам":
     selected_season = st.session_state.season
@@ -163,7 +163,7 @@ elif analysis_mode == "По сезонам":
         title=f"Динамика осадков (Сезон: {selected_season})",
         text_auto='.1f'
     )
-    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), width='stretch')
 
 elif analysis_mode == "По месяцам":
     selected_month_name = st.session_state.month
@@ -179,7 +179,7 @@ elif analysis_mode == "По месяцам":
         title=f"Динамика осадков (Месяц: {selected_month_name})",
         text_auto='.1f'
     )
-    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), width='stretch')
 
 elif analysis_mode == "Сводная":
     st.subheader("Сводная матрица осадков (Тепловая карта)")
@@ -218,4 +218,4 @@ elif analysis_mode == "Сводная":
         fig.update_xaxes(side="top", title_font=dict(size=16), tickfont=dict(size=14))
         fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
