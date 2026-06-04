@@ -70,24 +70,28 @@ st.sidebar.header("Настройки фильтра")
 
 available_cities = sorted(df["City"].unique())
 modes = ["По годам", "По сезонам", "По месяцам", "Сводная"]
+seasons = ["Зима", "Весна", "Лето", "Осень"]
+months_full = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
 
-# Инициализация из URL-параметров ТОЛЬКО при первом запуске
-# После этого session_state управляет состоянием — нет конфликта с виджетами
+# Инициализация session_state из URL-параметров (только один раз)
 if "initialized" not in st.session_state:
     qp = st.query_params
     saved_cities = qp.get_all("city") if "city" in qp else []
     saved_mode   = qp.get("mode", "По годам")
-    st.session_state.cities  = [c for c in saved_cities if c in available_cities] or (available_cities[:1] if available_cities else [])
-    st.session_state.mode    = saved_mode if saved_mode in modes else "По годам"
-    st.session_state.season  = qp.get("season", "Зима")
-    st.session_state.month   = qp.get("month", "Январь")
-    st.session_state.initialized = True
+    
+    # Прямая запись в ключи виджетов
+    st.session_state["cities"] = [c for c in saved_cities if c in available_cities] or (available_cities[:1] if available_cities else [])
+    st.session_state["mode"]   = saved_mode if saved_mode in modes else "По годам"
+    st.session_state["season"] = qp.get("season", "Зима")
+    st.session_state["month"]  = qp.get("month", "Январь")
+    st.session_state["initialized"] = True
 
+# --- БЛОК ВИДЖЕТОВ ---
 selected_cities = st.sidebar.multiselect(
     "Выберите города:",
     available_cities,
-    default=st.session_state.cities,
-    placeholder="Выберите город(а)..."
+    placeholder="Выберите город(а)...",
+    key="cities"
 )
 
 if not selected_cities:
@@ -97,17 +101,32 @@ if not selected_cities:
 analysis_mode = st.sidebar.radio(
     "Режим анализа:",
     modes,
-    index=modes.index(st.session_state.mode) if st.session_state.mode in modes else 0,
-    key="analysis_mode_radio"
+    key="mode"
 )
 
-# Обновляем session_state и URL из текущего состояния виджетов
-st.session_state.cities = selected_cities
-st.session_state.mode   = analysis_mode
-st.query_params["city"] = selected_cities
-st.query_params["mode"] = analysis_mode
+# Отрисовываем зависимые виджеты в сайдбаре ДО их использования в логике
+if analysis_mode == "По сезонам":
+    st.sidebar.selectbox("Выберите сезон:", seasons, key="season")
+elif analysis_mode == "По месяцам":
+    st.sidebar.selectbox("Выберите месяц:", months_full, key="month")
 
-# Filtering data for selected cities
+# Обновляем URL (синхронизация состояния виджетов с URL)
+st.query_params["city"] = st.session_state.cities
+st.query_params["mode"] = st.session_state.mode
+if analysis_mode == "По сезонам":
+    st.query_params["season"] = st.session_state.season
+elif analysis_mode == "По месяцам":
+    st.query_params["month"] = st.session_state.month
+
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ГРАФИКОВ ---
+def apply_chart_style(fig):
+    """Применяет единый стиль шрифтов и осей для графиков"""
+    fig.update_xaxes(type='category', title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
+    return fig
+
+# --- БЛОК ДАННЫХ И ГРАФИКОВ ---
 df_filtered = df[df["City"].isin(selected_cities)].copy()
 
 if df_filtered.empty:
@@ -115,9 +134,7 @@ if df_filtered.empty:
     st.stop()
 
 if analysis_mode == "По годам":
-    # Group by City, Year
     df_grouped = df_filtered.groupby(["City", "Year"])["Precipitation"].sum().reset_index()
-    
     st.subheader("Суммарное количество осадков по годам")
     
     fig = px.bar(
@@ -126,26 +143,15 @@ if analysis_mode == "По годам":
         title="Динамика осадков (По годам)",
         text_auto='.1f'
     )
-    fig.update_xaxes(type='category', title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
 
 elif analysis_mode == "По сезонам":
-    seasons = ["Зима", "Весна", "Лето", "Осень"]
-    season_idx = seasons.index(st.session_state.season) if st.session_state.season in seasons else 0
-    selected_season = st.sidebar.selectbox("Выберите сезон:", seasons, index=season_idx, key="season_box")
-    st.session_state.season = selected_season
-    st.query_params["season"] = selected_season
-    
-    # Filter by season
+    selected_season = st.session_state.season
     df_season = df_filtered[df_filtered["Season"] == selected_season]
     
-    # Убираем будущие года (например, зима 2027), так как там нет полных данных
     current_year = datetime.date.today().year
     df_season = df_season[df_season["SeasonYear"] <= current_year]
     
-    # Sum by City, SeasonYear
     df_grouped = df_season.groupby(["City", "SeasonYear"])["Precipitation"].sum().reset_index()
     
     st.subheader(f"Сравнение количества осадков в сезон: {selected_season}")
@@ -157,25 +163,12 @@ elif analysis_mode == "По сезонам":
         title=f"Динамика осадков (Сезон: {selected_season})",
         text_auto='.1f'
     )
-    fig.update_xaxes(type='category', title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
 
 elif analysis_mode == "По месяцам":
-    month_names = {
-        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
-    }
-    month_list = list(month_names.values())
-    month_idx = month_list.index(st.session_state.month) if st.session_state.month in month_list else 0
-    selected_month_name = st.sidebar.selectbox("Выберите месяц:", month_list, index=month_idx, key="month_box")
-    st.session_state.month = selected_month_name
-    st.query_params["month"] = selected_month_name
-    selected_month_num = [k for k, v in month_names.items() if v == selected_month_name][0]
+    selected_month_name = st.session_state.month
+    selected_month_num = months_full.index(selected_month_name) + 1
     
-    # Filter by month
     df_month = df_filtered[df_filtered["Month"] == selected_month_num]
     
     st.subheader(f"Сравнение количества осадков в месяц: {selected_month_name}")
@@ -186,19 +179,15 @@ elif analysis_mode == "По месяцам":
         title=f"Динамика осадков (Месяц: {selected_month_name})",
         text_auto='.1f'
     )
-    fig.update_xaxes(type='category', title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=14))
-    fig.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(apply_chart_style(fig), use_container_width=True)
 
 elif analysis_mode == "Сводная":
     st.subheader("Сводная матрица осадков (Тепловая карта)")
     st.info("Чем темнее цвет ячейки, тем больше осадков выпало в этот месяц.")
     
     month_names_dict = {
-        1: "Янв", 2: "Фев", 3: "Мар", 4: "Апр",
-        5: "Май", 6: "Июн", 7: "Июл", 8: "Авг",
-        9: "Сен", 10: "Окт", 11: "Ноя", 12: "Дек"
+        1: "Янв", 2: "Фев", 3: "Мар", 4: "Апр", 5: "Май", 6: "Июн", 
+        7: "Июл", 8: "Авг", 9: "Сен", 10: "Окт", 11: "Ноя", 12: "Дек"
     }
     
     for city in selected_cities:
